@@ -38,6 +38,11 @@ import javax.crypto.NoSuchPaddingException;
 @RequiresApi(api = Build.VERSION_CODES.M)
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
+
+  public CipherStorageKeystoreRsaEcb(boolean isStrongboxAvailable) {
+    this.isStrongboxAvailable = isStrongboxAvailable;
+  }
+
   //region Constants
   /** Selected algorithm. */
   public static final String ALGORITHM_RSA = KeyProperties.KEY_ALGORITHM_RSA;

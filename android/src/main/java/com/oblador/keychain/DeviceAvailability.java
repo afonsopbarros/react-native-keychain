@@ -34,6 +34,10 @@ public class DeviceAvailability {
         return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_IRIS);
     }
 
+  public static boolean isStrongboxAvailable(@NonNull final Context context) {
+    return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE);
+  }
+
   /** Check is permissions granted for biometric things. */
   public static boolean isPermissionsGranted(@NonNull final Context context) {
     // before api23 no permissions for biometric, no hardware == no permissions

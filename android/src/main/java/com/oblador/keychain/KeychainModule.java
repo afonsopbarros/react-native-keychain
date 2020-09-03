@@ -35,6 +35,7 @@ import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.EmptyParameterException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
+import java.security.KeyStore;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -139,12 +140,13 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     super(reactContext);
     prefsStorage = new PrefsStorage(reactContext);
 
-    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext));
-    addCipherStorageToMap(new CipherStorageKeystoreAesCbc());
+    boolean isStrongboxAvailable = DeviceAvailability.isStrongboxAvailable(getReactApplicationContext());
+    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext, isStrongboxAvailable));
+    addCipherStorageToMap(new CipherStorageKeystoreAesCbc(isStrongboxAvailable));
 
     // we have a references to newer api that will fail load of app classes in old androids OS
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb());
+      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb(isStrongboxAvailable));
     }
   }
 
@@ -170,8 +172,13 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       final Cipher instance = best.getCachedInstance();
       final boolean isSecure = best.supportsSecureHardware();
       final SecurityLevel requiredLevel = isSecure ? SecurityLevel.SECURE_HARDWARE : SecurityLevel.SECURE_SOFTWARE;
-      best.generateKeyAndStoreUnderAlias("warmingUp", requiredLevel);
-      best.getKeyStoreAndLoad();
+
+      KeyStore store = best.getKeyStoreAndLoad();
+      // use default alias
+      String alias = best.getCipherStorageName();
+      if (!store.containsAlias(alias)) {
+        best.generateKeyAndStoreUnderAlias(alias, requiredLevel);
+      }
 
       Log.v(KEYCHAIN_MODULE, "warming up takes: " +
         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime) +
