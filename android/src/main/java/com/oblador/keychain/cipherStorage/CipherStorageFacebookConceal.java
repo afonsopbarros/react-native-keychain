@@ -32,10 +32,12 @@ public class CipherStorageFacebookConceal extends CipherStorageBase {
 
   private final Crypto crypto;
 
-  public CipherStorageFacebookConceal(@NonNull final ReactApplicationContext reactContext) {
+  public CipherStorageFacebookConceal(@NonNull final ReactApplicationContext reactContext, boolean isStrongboxAvailable) {
     KeyChain keyChain = new SharedPrefsBackedKeyChain(reactContext, CryptoConfig.KEY_256);
 
     this.crypto = AndroidConceal.get().createDefaultCrypto(keyChain);
+
+    this.isStrongboxAvailable = isStrongboxAvailable;
   }
 
   //region Configuration

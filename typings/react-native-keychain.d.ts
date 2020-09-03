@@ -47,9 +47,7 @@ declare module 'react-native-keychain' {
   export enum BIOMETRY_TYPE {
     TOUCH_ID = 'TouchID',
     FACE_ID = 'FaceID',
-    FINGERPRINT = 'Fingerprint',
-    FACE = 'Face',
-    IRIS = 'Iris',
+    BIOMETRICS = 'Biometrics',
   }
 
   export enum STORAGE_TYPE {

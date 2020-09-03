@@ -32,6 +32,11 @@ import javax.crypto.spec.GCMParameterSpec;
 @RequiresApi(api = Build.VERSION_CODES.M)
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
+
+  public CipherStorageKeystoreAesGcmBiometrics(boolean isStrongboxAvailable) {
+    this.isStrongboxAvailable = isStrongboxAvailable;
+  }
+
   //region Constants
   /** Selected algorithm. */
   public static final String ALGORITHM_AES = KeyProperties.KEY_ALGORITHM_AES;

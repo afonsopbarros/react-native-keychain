@@ -63,7 +63,8 @@ abstract public class CipherStorageBase implements CipherStorage {
   /** Guard for {@link #isStrongboxAvailable} field assignment. */
   protected final Object _syncStrongbox = new Object();
   /** Try to resolve support of the strongbox and cache result for future calls. */
-  protected transient AtomicBoolean isStrongboxAvailable;
+//  protected transient AtomicBoolean isStrongboxAvailable;
+  protected transient boolean isStrongboxAvailable;
   /** Get cached instance of cipher. Get instance operation is slow. */
   protected transient Cipher cachedCipher;
   /** Cached instance of the Keystore. */
@@ -383,23 +384,32 @@ abstract public class CipherStorageBase implements CipherStorage {
     Key secretKey = null;
 
     // multi-threaded usage is possible
-    synchronized (_syncStrongbox) {
-      if (null == isStrongboxAvailable || isStrongboxAvailable.get()) {
-        if (null == isStrongboxAvailable) isStrongboxAvailable = new AtomicBoolean(false);
+    // synchronized (_syncStrongbox) {
+    //   if (null == isStrongboxAvailable || isStrongboxAvailable.get()) {
+    //     if (null == isStrongboxAvailable) isStrongboxAvailable = new AtomicBoolean(false);
 
-        try {
-          secretKey = tryGenerateStrongBoxSecurityKey(alias);
+    //     try {
+    //       secretKey = tryGenerateStrongBoxSecurityKey(alias);
 
-          isStrongboxAvailable.set(true);
-        } catch (GeneralSecurityException | ProviderException ex) {
-          Log.w(LOG_TAG, "StrongBox security storage is not available.", ex);
-        }
+    //       isStrongboxAvailable.set(true);
+    //     } catch (GeneralSecurityException | ProviderException ex) {
+    //       Log.w(LOG_TAG, "StrongBox security storage is not available.", ex);
+    //     }
+    //   }
+    // }
+
+    if (this.isStrongboxAvailable) {
+      try {
+        secretKey = tryGenerateStrongBoxSecurityKey(alias);
+      } catch (GeneralSecurityException | ProviderException ex) {
+        Log.w(LOG_TAG, "StrongBox security storage is not available.", ex);
       }
     }
 
     // If that is not possible, we generate the key in a regular way
     // (it still might be generated in hardware, but not in StrongBox)
-    if (null == secretKey || !isStrongboxAvailable.get()) {
+    // if (null == secretKey || !isStrongboxAvailable.get()) {
+    if (null == secretKey) {
       try {
         secretKey = tryGenerateRegularSecurityKey(alias);
       } catch (GeneralSecurityException fail) {

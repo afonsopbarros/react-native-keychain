@@ -30,6 +30,11 @@ import javax.crypto.SecretKeyFactory;
 @TargetApi(Build.VERSION_CODES.M)
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
+
+  public CipherStorageKeystoreAesCbc(boolean isStrongboxAvailable) {
+    this.isStrongboxAvailable = isStrongboxAvailable;
+  }
+
   //region Constants
   /** AES */
   public static final String ALGORITHM_AES = KeyProperties.KEY_ALGORITHM_AES;
