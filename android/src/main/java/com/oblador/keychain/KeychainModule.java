@@ -172,10 +172,9 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       final Cipher instance = best.getCachedInstance();
       final boolean isSecure = best.supportsSecureHardware();
       final SecurityLevel requiredLevel = isSecure ? SecurityLevel.SECURE_HARDWARE : SecurityLevel.SECURE_SOFTWARE;
-
       KeyStore store = best.getKeyStoreAndLoad();
-      // use default alias
-      String alias = best.getCipherStorageName();
+      // generate keypair in advance to improve subsequent access in the app
+      String alias = best.getDefaultAliasServiceName();
       if (!store.containsAlias(alias)) {
         best.generateKeyAndStoreUnderAlias(alias, requiredLevel);
       }
