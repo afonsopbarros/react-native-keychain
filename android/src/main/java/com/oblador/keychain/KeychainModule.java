@@ -51,6 +51,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   public static final String FINGERPRINT_SUPPORTED_NAME = "Fingerprint";
   public static final String FACE_SUPPORTED_NAME = "Face";
   public static final String IRIS_SUPPORTED_NAME = "Iris";
+  public static final String BIOMETRICS_SUPPORTED_NAME = "Biometrics";
   public static final String EMPTY_STRING = "";
 
   private static final String LOG_TAG = KeychainModule.class.getSimpleName();
@@ -140,13 +141,14 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     super(reactContext);
     prefsStorage = new PrefsStorage(reactContext);
 
-    boolean isStrongboxAvailable = DeviceAvailability.isStrongboxAvailable(getReactApplicationContext());
-    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext, isStrongboxAvailable));
-    addCipherStorageToMap(new CipherStorageKeystoreAesCbc(isStrongboxAvailable));
+    boolean hasStrongbox = isStrongboxAvailable();
+
+    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext, hasStrongbox));
+    addCipherStorageToMap(new CipherStorageKeystoreAesCbc(hasStrongbox));
 
     // we have a references to newer api that will fail load of app classes in old androids OS
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb(isStrongboxAvailable));
+      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb(hasStrongbox));
     }
   }
 
@@ -410,12 +412,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   public void getSupportedBiometryType(@NonNull final Promise promise) {
     try {
       String reply = null;
-      if(isFaceAuthAvailable()){
-        reply = FACE_SUPPORTED_NAME;
-      } else if(isIrisAuthAvailable()) {
-        reply = IRIS_SUPPORTED_NAME;
-      } else if(isFingerprintAuthAvailable()) {
-        reply = FINGERPRINT_SUPPORTED_NAME;
+      // Determines if biometrics can be used, or equivalently, whether BiometricPrompt can be shown
+      // (hardware available, templates enrolled, user-enabled)
+      if (isBiometricAuthAvailable()) {
+        reply = BIOMETRICS_SUPPORTED_NAME;
       }
 
       promise.resolve(reply);
@@ -684,7 +684,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   /* package */ CipherStorage getCipherStorageForCurrentAPILevel(final boolean useBiometry)
     throws CryptoFailedException {
     final int currentApiLevel = Build.VERSION.SDK_INT;
-    final boolean isBiometry = (isFingerprintAuthAvailable() || isFaceAuthAvailable() || isIrisAuthAvailable()) && useBiometry;
+    final boolean isBiometry = (isBiometricAuthAvailable()) && useBiometry;
     CipherStorage foundCipher = null;
 
     for (CipherStorage variant : cipherStorageMap.values()) {
@@ -747,6 +747,11 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     return cipherStorageMap.get(knownName);
   }
 
+  /** True - if biometrics can be used, otherwise false. */
+  /* package */ boolean isBiometricAuthAvailable() {
+    return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext());
+  }
+
   /** True - if fingerprint hardware available and configured, otherwise false. */
   /* package */ boolean isFingerprintAuthAvailable() {
     return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isFingerprintAuthAvailable(getReactApplicationContext());
@@ -760,6 +765,15 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   /** True - if iris recognition hardware available and configured, otherwise false. */
   /* package */ boolean isIrisAuthAvailable() {
     return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isIrisAuthAvailable(getReactApplicationContext());
+  }
+
+  /** True - if strongbox hardware available, otherwise false. */
+  /* package */ boolean isStrongboxAvailable() {
+    boolean isAvailable = false;
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+      isAvailable = DeviceAvailability.isStrongboxAvailable(getReactApplicationContext());
+    }
+    return isAvailable;
   }
 
   /** Is secured hardware a part of current storage or not. */

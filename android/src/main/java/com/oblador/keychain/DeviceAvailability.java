@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.biometric.BiometricManager;
 
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
@@ -34,6 +35,7 @@ public class DeviceAvailability {
         return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_IRIS);
     }
 
+  @RequiresApi(api = Build.VERSION_CODES.P)
   public static boolean isStrongboxAvailable(@NonNull final Context context) {
     return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE);
   }
