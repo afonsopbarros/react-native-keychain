@@ -143,8 +143,8 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
     boolean hasStrongbox = isStrongboxAvailable();
 
-    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext, hasStrongbox));
-    addCipherStorageToMap(new CipherStorageKeystoreAesCbc(hasStrongbox));
+//    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext, hasStrongbox));
+//    addCipherStorageToMap(new CipherStorageKeystoreAesCbc(hasStrongbox));
 
     // we have a references to newer api that will fail load of app classes in old androids OS
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -172,8 +172,9 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       Log.v(KEYCHAIN_MODULE, "warming up started at " + startTime);
       final CipherStorageBase best = (CipherStorageBase) getCipherStorageForCurrentAPILevel();
       final Cipher instance = best.getCachedInstance();
-      final boolean isSecure = best.supportsSecureHardware();
-      final SecurityLevel requiredLevel = isSecure ? SecurityLevel.SECURE_HARDWARE : SecurityLevel.SECURE_SOFTWARE;
+//      final boolean isSecure = best.supportsSecureHardware();
+//      final SecurityLevel requiredLevel = isSecure ? SecurityLevel.SECURE_HARDWARE : SecurityLevel.SECURE_SOFTWARE;
+      final SecurityLevel requiredLevel = SecurityLevel.ANY;
       KeyStore store = best.getKeyStoreAndLoad();
       // generate keypair in advance to improve subsequent access in the app
       String alias = best.getDefaultAliasServiceName();

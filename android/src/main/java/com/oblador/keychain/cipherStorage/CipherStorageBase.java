@@ -90,7 +90,7 @@ abstract public class CipherStorageBase implements CipherStorage {
 
     return
       (1000 * (isBiometrySupported() ? 1 : 0)) + // 0..1000
-        (100 * (supportsSecureHardware() ? 1 : 0)) + // 0..100
+//        (100 * (supportsSecureHardware() ? 1 : 0)) + // 0..100
         (getMinSupportedApiLevel()); // 19..29
   }
 
