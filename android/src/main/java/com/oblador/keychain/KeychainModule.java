@@ -80,6 +80,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     String SUBTITLE = "subtitle";
     String DESCRIPTION = "description";
     String CANCEL = "cancel";
+    String CONFIRMATION_REQUIRED = "confirmationRequired";
   }
 
   /** Options mapping keys. */
@@ -573,6 +574,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.CANCEL)) {
       String promptInfoNegativeButton = promptInfoOptionsMap.getString(AuthPromptOptions.CANCEL);
       promptInfoBuilder.setNegativeButtonText(promptInfoNegativeButton);
+    }
+    if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.CONFIRMATION_REQUIRED)) {
+      boolean promptInfoConfirmationRequired = promptInfoOptionsMap.getBoolean(AuthPromptOptions.CONFIRMATION_REQUIRED);
+      promptInfoBuilder.setConfirmationRequired(promptInfoConfirmationRequired);
     }
     final PromptInfo promptInfo = promptInfoBuilder.build();
 

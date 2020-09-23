@@ -72,6 +72,7 @@ export type AuthenticationPrompt = {|
   subtitle?: string,
   description?: string,
   cancel?: string,
+  confirmationRequired?: boolean,
 |};
 
 type BaseOptions = {|
