@@ -67,6 +67,7 @@ declare module 'react-native-keychain' {
     subtitle?: string;
     description?: string;
     cancel?: string;
+    confirmationRequired?: boolean;
   }
 
   export interface Options {

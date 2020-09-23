@@ -40,6 +40,7 @@ const simpleOptions: Options = {
     subtitle: 'subtitle',
     description: 'description',
     cancel: 'cancel',
+    confirmationRequired: false,
   },
   service: 'service',
 };
