@@ -7,7 +7,7 @@ import com.oblador.keychain.SecurityLevel;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
-import java.security.Key;
+import javax.crypto.Cipher;
 
 @SuppressWarnings({"unused", "WeakerAccess"})
 public interface CipherStorage {
@@ -28,16 +28,18 @@ public interface CipherStorage {
   class EncryptionResult extends CipherResult<byte[]> {
     /** Name of used for encryption cipher storage. */
     public final String cipherName;
+    public final byte[] vector;
 
     /** Main constructor. */
-    public EncryptionResult(final byte[] username, final byte[] password, final String cipherName) {
+    public EncryptionResult(final byte[] username, final byte[] password, final byte[] vector, final String cipherName) {
       super(username, password);
       this.cipherName = cipherName;
+      this.vector = vector;
     }
 
     /** Helper constructor. Simplifies cipher name extraction. */
-    public EncryptionResult(final byte[] username, final byte[] password, @NonNull final CipherStorage cipherStorage) {
-      this(username, password, cipherStorage.getCipherStorageName());
+    public EncryptionResult(final byte[] username, final byte[] password, final byte[] vector, @NonNull final CipherStorage cipherStorage) {
+      this(username, password, vector, cipherStorage.getCipherStorageName());
     }
   }
 
@@ -61,16 +63,25 @@ public interface CipherStorage {
 
   /** Ask access permission for decrypting credentials in provided context. */
   class DecryptionContext extends CipherResult<byte[]> {
-    public final Key key;
     public final String keyAlias;
 
     public DecryptionContext(@NonNull final String keyAlias,
-                             @NonNull final Key key,
                              @NonNull final byte[] password,
                              @NonNull final byte[] username) {
       super(username, password);
       this.keyAlias = keyAlias;
-      this.key = key;
+    }
+  }
+
+  /** Ask access permission for decrypting credentials in provided context. */
+  class EncryptContext extends CipherResult<String> {
+    public final String keyAlias;
+
+    public EncryptContext(@NonNull final String keyAlias,
+                             @NonNull final String password,
+                             @NonNull final String username) {
+      super(username, password);
+      this.keyAlias = keyAlias;
     }
   }
 
@@ -80,6 +91,8 @@ public interface CipherStorage {
     @Nullable
     DecryptionResult getResult();
 
+    @Nullable
+    EncryptionResult getEncryptionResult();
     /** Get reference on capture error. */
     @Nullable
     Throwable getError();
@@ -91,12 +104,14 @@ public interface CipherStorage {
   /** Handler that allows to inject some actions during decrypt operations. */
   interface DecryptionResultHandler extends WithResults {
     /** Ask user for interaction, often its unlock of keystore by biometric data providing. */
-    void askAccessPermissions(@NonNull final DecryptionContext context);
+    void askAccessPermissions(@NonNull final DecryptionContext context, Cipher cipher);
 
     /**
      *
      */
     void onDecrypt(@Nullable final DecryptionResult decryptionResult, @Nullable final Throwable error);
+    void onEncrypt(@Nullable final EncryptionResult encryptionResult);
+    void askAccessPermissionsEncryption(@NonNull final CipherStorage.EncryptContext context, Cipher cipher);
   }
   //endregion
 
@@ -104,7 +119,8 @@ public interface CipherStorage {
 
   /** Encrypt credentials with provided key (by alias) and required security level. */
   @NonNull
-  EncryptionResult encrypt(@NonNull final String alias,
+  EncryptionResult encrypt(@NonNull final DecryptionResultHandler handler,
+                           @NonNull final String alias,
                            @NonNull final String username,
                            @NonNull final String password,
                            @NonNull final SecurityLevel level)
@@ -119,7 +135,8 @@ public interface CipherStorage {
   DecryptionResult decrypt(@NonNull final String alias,
                            @NonNull final byte[] username,
                            @NonNull final byte[] password,
-                           @NonNull final SecurityLevel level)
+                           @NonNull final SecurityLevel level,
+                           byte[] vector)
     throws CryptoFailedException;
 
   /** Decrypt the credentials but redirect results of operation to handler. */
@@ -127,7 +144,8 @@ public interface CipherStorage {
                @NonNull final String alias,
                @NonNull final byte[] username,
                @NonNull final byte[] password,
-               @NonNull final SecurityLevel level)
+               @NonNull final SecurityLevel level,
+               byte[] vector)
     throws CryptoFailedException;
 
   /** Remove key (by alias) from storage. */
