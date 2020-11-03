@@ -30,6 +30,7 @@ import com.oblador.keychain.cipherStorage.CipherStorageBase;
 import com.oblador.keychain.cipherStorage.CipherStorageFacebookConceal;
 import com.oblador.keychain.cipherStorage.CipherStorageKeystoreAesCbc;
 import com.oblador.keychain.cipherStorage.CipherStorageKeystoreAesGcmBiometrics;
+import com.oblador.keychain.cipherStorage.CipherStorageKeystoreRsaEcb;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.EmptyParameterException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
@@ -109,7 +110,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   }
 
   /** Supported ciphers. */
-  @StringDef({KnownCiphers.FB, KnownCiphers.AES, KnownCiphers.RSA})
+  @StringDef({KnownCiphers.FB, KnownCiphers.AES,KnownCiphers.AES_BIOMETRICS, KnownCiphers.RSA})
   public @interface KnownCiphers {
     /** Facebook conceal compatibility lib in use. */
     String FB = "FacebookConceal";
@@ -151,6 +152,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     // we have a references to newer api that will fail load of app classes in old androids OS
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       addCipherStorageToMap(new CipherStorageKeystoreAesGcmBiometrics(hasStrongbox));
+      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb(hasStrongbox));
     }
   }
 
@@ -917,19 +919,32 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
       try {
         if (null != context) {
-          Cipher cipher = result.getCryptoObject().getCipher();
-          byte[] usernameBytes = cipher.update(context.username);
-          byte[] passBytes = cipher.doFinal(context.password);
-          String userNameAndPass = new String(passBytes);
-          String[] data = userNameAndPass.split("\n");
-          final DecryptionResult decrypted = new DecryptionResult(
-            data[0],
-            data[1]
-          );
+          // decryption
 
-          onDecrypt(decrypted, null);
+          if (result.getCryptoObject() == null) {
+            // RSA flow (using `setUserAuthenticationValidityDurationSeconds`)
+            final DecryptionResult decrypted = new DecryptionResult(
+              storage.decryptBytes(context.key, context.username),
+              storage.decryptBytes(context.key, context.password)
+            );
+
+            onDecrypt(decrypted, null);
+          } else {
+            // AES_BIOMETRICS flow
+            Cipher cipher = result.getCryptoObject().getCipher();
+            byte[] usernameBytes = cipher.update(context.username);
+            byte[] passBytes = cipher.doFinal(context.password);
+            String userNameAndPass = new String(passBytes);
+            String[] data = userNameAndPass.split("\n");
+            final DecryptionResult decrypted = new DecryptionResult(
+              data[0],
+              data[1]
+            );
+
+            onDecrypt(decrypted, null);
+          }
         } else if (null != encryptContext) {
-
+          // encryption
           Cipher cipher = result.getCryptoObject().getCipher();
           byte[] usernameBytes = (encryptContext.username.trim() + '\n').getBytes();
           byte[] passBytes = encryptContext.password.getBytes();
@@ -966,7 +981,11 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
       final BiometricPrompt prompt = new BiometricPrompt(activity, executor, this);
 
-      prompt.authenticate(promptInfo, new BiometricPrompt.CryptoObject(cipher));
+      if (cipher != null) {
+        prompt.authenticate(promptInfo, new BiometricPrompt.CryptoObject(cipher));
+      } else {
+        prompt.authenticate(promptInfo);
+      }
     }
 
     /** Block current NON-main thread and wait for user authentication results. */

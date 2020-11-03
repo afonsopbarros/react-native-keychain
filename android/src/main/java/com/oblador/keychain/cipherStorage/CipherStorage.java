@@ -7,6 +7,8 @@ import com.oblador.keychain.SecurityLevel;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
+import java.security.Key;
+
 import javax.crypto.Cipher;
 
 @SuppressWarnings({"unused", "WeakerAccess"})
@@ -63,17 +65,20 @@ public interface CipherStorage {
 
   /** Ask access permission for decrypting credentials in provided context. */
   class DecryptionContext extends CipherResult<byte[]> {
+    public final Key key;
     public final String keyAlias;
 
     public DecryptionContext(@NonNull final String keyAlias,
+                             @NonNull final Key key,
                              @NonNull final byte[] password,
                              @NonNull final byte[] username) {
       super(username, password);
       this.keyAlias = keyAlias;
+      this.key = key;
     }
   }
 
-  /** Ask access permission for decrypting credentials in provided context. */
+  /** Ask access permission for encrypting credentials in provided context. */
   class EncryptContext extends CipherResult<String> {
     public final String keyAlias;
 

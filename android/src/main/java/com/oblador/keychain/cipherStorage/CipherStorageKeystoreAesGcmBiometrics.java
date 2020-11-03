@@ -133,7 +133,7 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
       Key key = extractGeneratedKey(safeAlias, level, retries);
 
       final DecryptionContext context =
-        new DecryptionContext(safeAlias, password, username);
+        new DecryptionContext(safeAlias, key, password, username);
 
       final Cipher cipher = getCachedInstance();
       cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, vector));

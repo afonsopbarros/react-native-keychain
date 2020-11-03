@@ -84,7 +84,7 @@ abstract public class CipherStorageBase implements CipherStorage {
    * Formula: `1000 * isBiometrySupported() + 100 * isSecureHardware() + minSupportedApiLevel()`
    */
   @Override
-  public final int getCapabilityLevel() {
+  public int getCapabilityLevel() {
     // max: 1000 + 100 + 29 == 1129
     // min: 0000 + 000 + 19 == 0019
 
