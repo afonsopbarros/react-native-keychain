@@ -89,6 +89,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     String ACCESS_GROUP = "accessGroup";
     String ACCESSIBLE = "accessible";
     String AUTH_PROMPT = "authenticationPrompt";
+    String AUTH_MIGRATION_PROMPT = "authenticationMigrationPrompt";
     String AUTH_TYPE = "authenticationType";
     String SERVICE = "service";
     String SECURITY_LEVEL = "securityLevel";
@@ -227,7 +228,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
       throwIfInsufficientLevel(storage, level);
 
-      final PromptInfo promptInfo = getPromptInfo(options);
+      final PromptInfo promptInfo = getPromptInfo(options, Maps.AUTH_PROMPT);
       final DecryptionResultHandler handler = getInteractiveHandler(storage, promptInfo);
       final EncryptionResult result = storage.encrypt(handler, alias, username, password, level);
 
@@ -302,8 +303,13 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       final CipherStorage current = getCipherStorageForCurrentAPILevel(useBiometry);
       final String rules = getSecurityRulesOrDefault(options);
 
-      final PromptInfo promptInfo = getPromptInfo(options);
-      final DecryptionResult decryptionResult = decryptCredentials(alias, current, resultSet, rules, promptInfo);
+      final PromptInfo promptInfo = getPromptInfo(options, Maps.AUTH_PROMPT);
+      PromptInfo migrationPromptInfo = promptInfo;
+      if (options != null && options.hasKey(Maps.AUTH_MIGRATION_PROMPT)) {
+        migrationPromptInfo = getPromptInfo(options, Maps.AUTH_MIGRATION_PROMPT);
+      }
+
+      final DecryptionResult decryptionResult = decryptCredentials(alias, current, resultSet, rules, promptInfo, migrationPromptInfo);
 
       final WritableMap credentials = Arguments.createMap();
       credentials.putString(Maps.SERVICE, alias);
@@ -556,8 +562,8 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
   /** Extract user specified prompt info from options. */
   @NonNull
-  private static PromptInfo getPromptInfo(@Nullable final ReadableMap options) {
-    final ReadableMap promptInfoOptionsMap = (options != null && options.hasKey(Maps.AUTH_PROMPT)) ? options.getMap(Maps.AUTH_PROMPT) : null;
+  private static PromptInfo getPromptInfo(@Nullable final ReadableMap options, @Nullable final String key) {
+    final ReadableMap promptInfoOptionsMap = (options != null && options.hasKey(key)) ? options.getMap(key) : null;
 
     final PromptInfo.Builder promptInfoBuilder = new PromptInfo.Builder();
     if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.TITLE)) {
@@ -594,7 +600,8 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                               @NonNull final CipherStorage current,
                                               @NonNull final ResultSet resultSet,
                                               @Rules @NonNull final String rules,
-                                              @NonNull final PromptInfo promptInfo)
+                                              @NonNull final PromptInfo promptInfo,
+                                              @NonNull final PromptInfo migrationPromptInfo)
     throws CryptoFailedException, KeyStoreAccessException {
     final String storageName = resultSet.cipherStorageName;
 
@@ -616,7 +623,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     if (Rules.AUTOMATIC_UPGRADE.equals(rules)) {
       try {
         // encrypt using the current cipher storage
-        migrateCipherStorage(alias, current, oldStorage, decryptionResult, promptInfo);
+        migrateCipherStorage(alias, current, oldStorage, decryptionResult, migrationPromptInfo);
       } catch (CryptoFailedException e) {
         Log.w(KEYCHAIN_MODULE, "Migrating to a less safe storage is not allowed. Keeping the old one");
       }
