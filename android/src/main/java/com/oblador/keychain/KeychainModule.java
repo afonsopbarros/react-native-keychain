@@ -847,7 +847,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
         final CryptoFailedException failure = new CryptoFailedException(
           "Could not start fingerprint Authentication. No permissions granted.");
 
-        onDecrypt(null, failure);
+        onError(failure);
       } else {
         startAuthentication(cipher);
       }
@@ -861,17 +861,22 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     public void askAccessPermissionsEncryption(@NonNull final CipherStorage.EncryptContext context, Cipher cipher) {
       encryptContext = context;
       this.context = null;
-      final CryptoFailedException failure = new CryptoFailedException(
-        "Non interactive decryption mode.");
 
-      startAuthentication(cipher);
+      if (!DeviceAvailability.isPermissionsGranted(getReactApplicationContext())) {
+        final CryptoFailedException failure = new CryptoFailedException(
+          "Could not start fingerprint Authentication. No permissions granted.");
+
+        onError(failure);
+      } else {
+        startAuthentication(cipher);
+      }
     }
 
     @Override
-    public void onDecrypt(@Nullable final DecryptionResult decryptionResult, @Nullable final Throwable error) {
+    public void onDecrypt(@Nullable final DecryptionResult decryptionResult) {
       this.result = decryptionResult;
       this.encryptionResult = null;
-      this.error = error;
+      this.error = null;
 
       synchronized (this) {
         notifyAll();
@@ -880,7 +885,20 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
     @Override
     public void onEncrypt(@Nullable final EncryptionResult encryptionResult) {
+      this.result = null;
       this.encryptionResult = encryptionResult;
+      this.error = null;
+
+      synchronized (this) {
+        notifyAll();
+      }
+    }
+
+    @Override
+    public void onError(@Nullable Throwable error) {
+      this.result = null;
+      this.encryptionResult = null;
+      this.error = error;
 
       synchronized (this) {
         notifyAll();
@@ -905,9 +923,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     @Override
     public void onAuthenticationError(final int errorCode, @NonNull final CharSequence errString) {
       final CryptoFailedException error = new CryptoFailedException("code: " + errorCode + ", msg: " + errString);
-      Log.d("BIOAUTH", "onAuthenticationError");
-      Log.d("BIOAUTH", error.getMessage(), error);
-      onDecrypt(null, error);
+      onError(error);
     }
 
     /**
@@ -915,8 +931,6 @@ public class KeychainModule extends ReactContextBaseJavaModule {
      */
     @Override
     public void onAuthenticationSucceeded(@NonNull final BiometricPrompt.AuthenticationResult result) {
-      Log.d("BIOAUTH", "onAuthenticationSucceeded");
-
       try {
         if (null != context) {
           // decryption
@@ -928,7 +942,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
               storage.decryptBytes(context.key, context.password)
             );
 
-            onDecrypt(decrypted, null);
+            onDecrypt(decrypted);
           } else {
             // AES_BIOMETRICS flow
             Cipher cipher = result.getCryptoObject().getCipher();
@@ -941,7 +955,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
               data[1]
             );
 
-            onDecrypt(decrypted, null);
+            onDecrypt(decrypted);
           }
         } else if (null != encryptContext) {
           // encryption
@@ -961,7 +975,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
           throw new NullPointerException("Decrypt context is not assigned yet.");
         }
       } catch (Throwable fail) {
-        onDecrypt(null, fail);
+        onError(fail);
       }
     }
 

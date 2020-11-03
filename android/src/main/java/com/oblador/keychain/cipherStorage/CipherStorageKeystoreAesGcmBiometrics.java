@@ -141,7 +141,7 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
       handler.askAccessPermissions(context, cipher);
     } catch (final Throwable fail) {
       // any other exception treated as a failure
-      handler.onDecrypt(null, fail);
+      handler.onError(fail);
     }
   }
 
@@ -274,19 +274,28 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
       final CryptoFailedException failure = new CryptoFailedException(
         "Non interactive decryption mode.");
 
-      onDecrypt(null, failure);
+      onError(failure);
     }
 
     @Override
-    public void onDecrypt(@Nullable final DecryptionResult decryptionResult,
-                          @Nullable final Throwable error) {
+    public void onDecrypt(@Nullable DecryptionResult decryptionResult) {
       this.result = decryptionResult;
-      this.error = error;
+      this.encryptionResult = null;
+      this.error = null;
     }
 
     @Override
     public void onEncrypt(@Nullable EncryptionResult encryptionResult) {
+      this.result = null;
       this.encryptionResult = encryptionResult;
+      this.error = null;
+    }
+
+    @Override
+    public void onError(@Nullable Throwable error) {
+      this.result = null;
+      this.encryptionResult = null;
+      this.error = error;
     }
 
     @Override
@@ -294,7 +303,7 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
       final CryptoFailedException failure = new CryptoFailedException(
         "Non interactive encryption mode.");
 
-      onDecrypt(null, failure);
+      onError(failure);
     }
 
     @Nullable

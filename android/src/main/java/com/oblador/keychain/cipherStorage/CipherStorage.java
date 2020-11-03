@@ -114,8 +114,9 @@ public interface CipherStorage {
     /**
      *
      */
-    void onDecrypt(@Nullable final DecryptionResult decryptionResult, @Nullable final Throwable error);
+    void onDecrypt(@Nullable final DecryptionResult decryptionResult);
     void onEncrypt(@Nullable final EncryptionResult encryptionResult);
+    void onError(@Nullable final Throwable error);
     void askAccessPermissionsEncryption(@NonNull final CipherStorage.EncryptContext context, Cipher cipher);
   }
   //endregion

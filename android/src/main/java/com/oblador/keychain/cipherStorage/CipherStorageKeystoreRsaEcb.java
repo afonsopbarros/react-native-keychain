@@ -150,7 +150,7 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
         decryptBytes(key, password)
       );
 
-      handler.onDecrypt(results, null);
+      handler.onDecrypt(results);
     } catch (final UserNotAuthenticatedException ex) {
       Log.d(LOG_TAG, "Unlock of keystore is needed. Error: " + ex.getMessage(), ex);
 
@@ -161,7 +161,7 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
       handler.askAccessPermissions(context, null);
     } catch (final Throwable fail) {
       // any other exception treated as a failure
-      handler.onDecrypt(null, fail);
+      handler.onError(fail);
     }
   }
 
@@ -294,7 +294,7 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
       final CryptoFailedException failure = new CryptoFailedException(
         "Non interactive encryption mode.");
 
-      onDecrypt(null, failure);
+      onError(failure);
     }
 
     @Override
@@ -302,16 +302,21 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
       final CryptoFailedException failure = new CryptoFailedException(
         "Non interactive decryption mode.");
 
-      onDecrypt(null, failure);
+      onError(failure);
     }
 
     @Override
     public void onEncrypt(@Nullable EncryptionResult encryptionResult) {}
 
     @Override
-    public void onDecrypt(@Nullable final DecryptionResult decryptionResult,
-                          @Nullable final Throwable error) {
+    public void onDecrypt(@Nullable final DecryptionResult decryptionResult) {
       this.result = decryptionResult;
+      this.error = null;
+    }
+
+    @Override
+    public void onError(@Nullable Throwable error) {
+      this.result = null;
       this.error = error;
     }
 

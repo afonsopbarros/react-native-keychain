@@ -167,9 +167,9 @@ public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
     try {
       final DecryptionResult results = decrypt(service, username, password, level, vector);
 
-      handler.onDecrypt(results, null);
+      handler.onDecrypt(results);
     } catch (Throwable fail) {
-      handler.onDecrypt(null, fail);
+      handler.onError(fail);
     }
   }
   //endregion
