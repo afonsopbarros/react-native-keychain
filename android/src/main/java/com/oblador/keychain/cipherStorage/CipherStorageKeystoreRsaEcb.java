@@ -32,12 +32,18 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
 
 /** Fingerprint biometry protected storage. */
 @RequiresApi(api = Build.VERSION_CODES.M)
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
+
+  public CipherStorageKeystoreRsaEcb(boolean isStrongboxAvailable) {
+    this.isStrongboxAvailable = isStrongboxAvailable;
+  }
+
   //region Constants
   /** Selected algorithm. */
   public static final String ALGORITHM_RSA = KeyProperties.KEY_ALGORITHM_RSA;
@@ -53,9 +59,24 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
   //endregion
 
   //region Overrides
+
+
+  @Override
+  public int getCapabilityLevel() {
+    // max: 1000 + 100 + 29 == 1129
+    // min: 0000 + 000 + 19 == 0019
+
+    return
+//      (1000 * (isBiometrySupported() ? 1 : 0)) + // 0..1000
+//        (100 * (supportsSecureHardware() ? 1 : 0)) + // 0..100
+//        (getMinSupportedApiLevel()); // 19..29
+    0; // we don't want to choose it and instead go for AES_BIOMETRICS
+  }
+
   @Override
   @NonNull
-  public EncryptionResult encrypt(@NonNull final String alias,
+  public EncryptionResult encrypt(@NonNull final DecryptionResultHandler handler,
+                                  @NonNull final String alias,
                                   @NonNull final String username,
                                   @NonNull final String password,
                                   @NonNull final SecurityLevel level)
@@ -86,11 +107,12 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
   public DecryptionResult decrypt(@NonNull String alias,
                                   @NonNull byte[] username,
                                   @NonNull byte[] password,
-                                  @NonNull final SecurityLevel level)
+                                  @NonNull final SecurityLevel level,
+                                  byte[] vector)
     throws CryptoFailedException {
 
     final NonInteractiveHandler handler = new NonInteractiveHandler();
-    decrypt(handler, alias, username, password, level);
+    decrypt(handler, alias, username, password, level, vector);
 
     CryptoFailedException.reThrowOnError(handler.getError());
 
@@ -107,7 +129,8 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
                       @NonNull String alias,
                       @NonNull byte[] username,
                       @NonNull byte[] password,
-                      @NonNull final SecurityLevel level)
+                      @NonNull final SecurityLevel level,
+                      byte[] vector)
     throws CryptoFailedException {
 
     throwIfInsufficientLevel(level);
@@ -127,7 +150,7 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
         decryptBytes(key, password)
       );
 
-      handler.onDecrypt(results, null);
+      handler.onDecrypt(results);
     } catch (final UserNotAuthenticatedException ex) {
       Log.d(LOG_TAG, "Unlock of keystore is needed. Error: " + ex.getMessage(), ex);
 
@@ -135,10 +158,10 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
       @SuppressWarnings("ConstantConditions") final DecryptionContext context =
         new DecryptionContext(safeAlias, key, password, username);
 
-      handler.askAccessPermissions(context);
+      handler.askAccessPermissions(context, null);
     } catch (final Throwable fail) {
       // any other exception treated as a failure
-      handler.onDecrypt(null, fail);
+      handler.onError(fail);
     }
   }
 
@@ -205,6 +228,7 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
     return new EncryptionResult(
       encryptString(key, username),
       encryptString(key, password),
+      new byte[0],
       this);
   }
 
@@ -266,17 +290,33 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
     private Throwable error;
 
     @Override
-    public void askAccessPermissions(@NonNull final DecryptionContext context) {
+    public void askAccessPermissionsEncryption(@NonNull EncryptContext context, Cipher cipher) {
       final CryptoFailedException failure = new CryptoFailedException(
-        "Non interactive decryption mode.");
+        "Non interactive encryption mode.");
 
-      onDecrypt(null, failure);
+      onError(failure);
     }
 
     @Override
-    public void onDecrypt(@Nullable final DecryptionResult decryptionResult,
-                          @Nullable final Throwable error) {
+    public void askAccessPermissions(@NonNull final DecryptionContext context, Cipher cipher) {
+      final CryptoFailedException failure = new CryptoFailedException(
+        "Non interactive decryption mode.");
+
+      onError(failure);
+    }
+
+    @Override
+    public void onEncrypt(@Nullable EncryptionResult encryptionResult) {}
+
+    @Override
+    public void onDecrypt(@Nullable final DecryptionResult decryptionResult) {
       this.result = decryptionResult;
+      this.error = null;
+    }
+
+    @Override
+    public void onError(@Nullable Throwable error) {
+      this.result = null;
       this.error = error;
     }
 
@@ -284,6 +324,12 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
     @Override
     public DecryptionResult getResult() {
       return result;
+    }
+
+    @Nullable
+    @Override
+    public EncryptionResult getEncryptionResult() {
+      return null;
     }
 
     @Nullable

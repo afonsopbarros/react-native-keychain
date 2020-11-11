@@ -30,6 +30,11 @@ import javax.crypto.SecretKeyFactory;
 @TargetApi(Build.VERSION_CODES.M)
 @SuppressWarnings({"unused", "WeakerAccess"})
 public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
+
+  public CipherStorageKeystoreAesCbc(boolean isStrongboxAvailable) {
+    this.isStrongboxAvailable = isStrongboxAvailable;
+  }
+
   //region Constants
   /** AES */
   public static final String ALGORITHM_AES = KeyProperties.KEY_ALGORITHM_AES;
@@ -95,7 +100,8 @@ public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
   //region Overrides
   @Override
   @NonNull
-  public EncryptionResult encrypt(@NonNull final String alias,
+  public EncryptionResult encrypt(@NonNull DecryptionResultHandler handler,
+                                  @NonNull final String alias,
                                   @NonNull final String username,
                                   @NonNull final String password,
                                   @NonNull final SecurityLevel level)
@@ -112,6 +118,7 @@ public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
       return new EncryptionResult(
         encryptString(key, username),
         encryptString(key, password),
+              new byte[0],
         this);
     } catch (GeneralSecurityException e) {
       throw new CryptoFailedException("Could not encrypt data with alias: " + alias, e);
@@ -126,7 +133,8 @@ public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
   public DecryptionResult decrypt(@NonNull final String alias,
                                   @NonNull final byte[] username,
                                   @NonNull final byte[] password,
-                                  @NonNull final SecurityLevel level)
+                                  @NonNull final SecurityLevel level,
+                                  @NonNull final byte[] vector)
     throws CryptoFailedException {
 
     throwIfInsufficientLevel(level);
@@ -155,13 +163,13 @@ public class CipherStorageKeystoreAesCbc extends CipherStorageBase {
                       @NonNull final String service,
                       @NonNull final byte[] username,
                       @NonNull final byte[] password,
-                      @NonNull final SecurityLevel level) {
+                      @NonNull final SecurityLevel level, byte[] vector) {
     try {
-      final DecryptionResult results = decrypt(service, username, password, level);
+      final DecryptionResult results = decrypt(service, username, password, level, vector);
 
-      handler.onDecrypt(results, null);
+      handler.onDecrypt(results);
     } catch (Throwable fail) {
-      handler.onDecrypt(null, fail);
+      handler.onError(fail);
     }
   }
   //endregion

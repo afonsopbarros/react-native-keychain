@@ -47,9 +47,7 @@ declare module 'react-native-keychain' {
   export enum BIOMETRY_TYPE {
     TOUCH_ID = 'TouchID',
     FACE_ID = 'FaceID',
-    FINGERPRINT = 'Fingerprint',
-    FACE = 'Face',
-    IRIS = 'Iris',
+    BIOMETRICS = 'Biometrics',
   }
 
   export enum STORAGE_TYPE {
@@ -69,6 +67,7 @@ declare module 'react-native-keychain' {
     subtitle?: string;
     description?: string;
     cancel?: string;
+    confirmationRequired?: boolean;
   }
 
   export interface Options {
@@ -76,6 +75,7 @@ declare module 'react-native-keychain' {
     accessGroup?: string;
     accessible?: ACCESSIBLE;
     authenticationPrompt?: string | AuthenticationPrompt;
+    authenticationMigrationPrompt?: AuthenticationPrompt;
     authenticationType?: AUTHENTICATION_TYPE;
     service?: string;
     securityLevel?: SECURITY_LEVEL;
@@ -91,7 +91,7 @@ declare module 'react-native-keychain' {
 
   function getGenericPassword(
     options?: Options
-  ): Promise<false | SharedWebCredentials>;
+  ): Promise<false | UserCredentials>;
 
   function resetGenericPassword(options?: Options): Promise<boolean>;
 
@@ -107,7 +107,7 @@ declare module 'react-native-keychain' {
   function getInternetCredentials(
     server: string,
     options?: Options
-  ): Promise<false | UserCredentials>;
+  ): Promise<false | SharedWebCredentials>;
 
   function resetInternetCredentials(
     server: string,

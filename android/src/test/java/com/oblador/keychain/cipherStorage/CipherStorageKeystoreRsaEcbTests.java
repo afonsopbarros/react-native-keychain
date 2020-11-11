@@ -69,7 +69,7 @@ public class CipherStorageKeystoreRsaEcbTests {
   @Test
   @Config(sdk = Build.VERSION_CODES.M)
   public void testGetSecurityLevel_api23() throws Exception {
-    final CipherStorageKeystoreAesCbc instance = new CipherStorageKeystoreAesCbc();
+    final CipherStorageKeystoreAesCbc instance = new CipherStorageKeystoreAesCbc(true);
     final Key mock = Mockito.mock(SecretKey.class);
 
     final SecurityLevel level = instance.getSecurityLevel(mock);
@@ -93,7 +93,7 @@ public class CipherStorageKeystoreRsaEcbTests {
     int result = BiometricManager.from(context).canAuthenticate();
     assertThat(result, is(BiometricManager.BIOMETRIC_SUCCESS));
 
-    final CipherStorage storage = new CipherStorageKeystoreAesCbc();;
+    final CipherStorage storage = new CipherStorageKeystoreAesCbc(true);;
 
     // expected RsaEcb with fingerprint
     assertThat(storage.supportsSecureHardware(), is(true));

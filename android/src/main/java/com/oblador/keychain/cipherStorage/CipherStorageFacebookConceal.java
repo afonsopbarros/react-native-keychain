@@ -32,10 +32,12 @@ public class CipherStorageFacebookConceal extends CipherStorageBase {
 
   private final Crypto crypto;
 
-  public CipherStorageFacebookConceal(@NonNull final ReactApplicationContext reactContext) {
+  public CipherStorageFacebookConceal(@NonNull final ReactApplicationContext reactContext, boolean isStrongboxAvailable) {
     KeyChain keyChain = new SharedPrefsBackedKeyChain(reactContext, CryptoConfig.KEY_256);
 
     this.crypto = AndroidConceal.get().createDefaultCrypto(keyChain);
+
+    this.isStrongboxAvailable = isStrongboxAvailable;
   }
 
   //region Configuration
@@ -68,12 +70,12 @@ public class CipherStorageFacebookConceal extends CipherStorageBase {
   //region Overrides
   @Override
   @NonNull
-  public EncryptionResult encrypt(@NonNull final String alias,
+  public EncryptionResult encrypt(@NonNull DecryptionResultHandler handler,
+                                  @NonNull final String alias,
                                   @NonNull final String username,
                                   @NonNull final String password,
                                   @NonNull final SecurityLevel level)
     throws CryptoFailedException {
-
     throwIfInsufficientLevel(level);
     throwIfNoCryptoAvailable();
 
@@ -87,6 +89,7 @@ public class CipherStorageFacebookConceal extends CipherStorageBase {
       return new EncryptionResult(
         encryptedUsername,
         encryptedPassword,
+        new byte[0],
         this);
     } catch (Throwable fail) {
       throw new CryptoFailedException("Encryption failed for alias: " + alias, fail);
@@ -98,7 +101,8 @@ public class CipherStorageFacebookConceal extends CipherStorageBase {
   public DecryptionResult decrypt(@NonNull final String alias,
                                   @NonNull final byte[] username,
                                   @NonNull final byte[] password,
-                                  @NonNull final SecurityLevel level)
+                                  @NonNull final SecurityLevel level,
+                                  @NonNull final byte[] vector)
     throws CryptoFailedException {
 
     throwIfInsufficientLevel(level);
@@ -126,14 +130,14 @@ public class CipherStorageFacebookConceal extends CipherStorageBase {
                       @NonNull String service,
                       @NonNull byte[] username,
                       @NonNull byte[] password,
-                      @NonNull final SecurityLevel level) {
+                      @NonNull final SecurityLevel level, byte[] vector) {
 
     try {
-      final DecryptionResult results = decrypt(service, username, password, level);
+      final DecryptionResult results = decrypt(service, username, password, level, vector);
 
-      handler.onDecrypt(results, null);
+      handler.onDecrypt(results);
     } catch (Throwable fail) {
-      handler.onDecrypt(null, fail);
+      handler.onError(fail);
     }
   }
 

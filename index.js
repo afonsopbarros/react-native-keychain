@@ -38,9 +38,7 @@ export const AUTHENTICATION_TYPE = Object.freeze({
 export const BIOMETRY_TYPE = Object.freeze({
   TOUCH_ID: 'TouchID',
   FACE_ID: 'FaceID',
-  FINGERPRINT: 'Fingerprint',
-  FACE: 'Face',
-  IRIS: 'Iris',
+  BIOMETRICS: 'Biometrics',
 });
 
 export const STORAGE_TYPE = Object.freeze({
@@ -74,6 +72,7 @@ export type AuthenticationPrompt = {|
   subtitle?: string,
   description?: string,
   cancel?: string,
+  confirmationRequired?: boolean,
 |};
 
 type BaseOptions = {|
@@ -190,7 +189,7 @@ export function setGenericPassword(
  */
 export function getGenericPassword(
   serviceOrOptions?: string | Options
-): Promise<false | SharedWebCredentials> {
+): Promise<false | UserCredentials> {
   const options = normalizeOptions(serviceOrOptions);
   return RNKeychainManager.getGenericPasswordForOptions(options);
 }

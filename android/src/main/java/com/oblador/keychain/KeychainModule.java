@@ -29,12 +29,13 @@ import com.oblador.keychain.cipherStorage.CipherStorage.EncryptionResult;
 import com.oblador.keychain.cipherStorage.CipherStorageBase;
 import com.oblador.keychain.cipherStorage.CipherStorageFacebookConceal;
 import com.oblador.keychain.cipherStorage.CipherStorageKeystoreAesCbc;
+import com.oblador.keychain.cipherStorage.CipherStorageKeystoreAesGcmBiometrics;
 import com.oblador.keychain.cipherStorage.CipherStorageKeystoreRsaEcb;
-import com.oblador.keychain.cipherStorage.CipherStorageKeystoreRsaEcb.NonInteractiveHandler;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.EmptyParameterException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
+import java.security.KeyStore;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -50,6 +51,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   public static final String FINGERPRINT_SUPPORTED_NAME = "Fingerprint";
   public static final String FACE_SUPPORTED_NAME = "Face";
   public static final String IRIS_SUPPORTED_NAME = "Iris";
+  public static final String BIOMETRICS_SUPPORTED_NAME = "Biometrics";
   public static final String EMPTY_STRING = "";
 
   private static final String LOG_TAG = KeychainModule.class.getSimpleName();
@@ -78,6 +80,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     String SUBTITLE = "subtitle";
     String DESCRIPTION = "description";
     String CANCEL = "cancel";
+    String CONFIRMATION_REQUIRED = "confirmationRequired";
   }
 
   /** Options mapping keys. */
@@ -86,6 +89,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     String ACCESS_GROUP = "accessGroup";
     String ACCESSIBLE = "accessible";
     String AUTH_PROMPT = "authenticationPrompt";
+    String AUTH_MIGRATION_PROMPT = "authenticationMigrationPrompt";
     String AUTH_TYPE = "authenticationType";
     String SERVICE = "service";
     String SECURITY_LEVEL = "securityLevel";
@@ -107,12 +111,14 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   }
 
   /** Supported ciphers. */
-  @StringDef({KnownCiphers.FB, KnownCiphers.AES, KnownCiphers.RSA})
+  @StringDef({KnownCiphers.FB, KnownCiphers.AES,KnownCiphers.AES_BIOMETRICS, KnownCiphers.RSA})
   public @interface KnownCiphers {
     /** Facebook conceal compatibility lib in use. */
     String FB = "FacebookConceal";
     /** AES encryption. */
     String AES = "KeystoreAESCBC";
+    /** Biometric + AES. */
+    String AES_BIOMETRICS = "KeystoreAESGCMBiometrics";
     /** Biometric + RSA. */
     String RSA = "KeystoreRSAECB";
   }
@@ -139,12 +145,15 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     super(reactContext);
     prefsStorage = new PrefsStorage(reactContext);
 
-    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext));
-    addCipherStorageToMap(new CipherStorageKeystoreAesCbc());
+    boolean hasStrongbox = isStrongboxAvailable();
+
+    addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext, hasStrongbox));
+    addCipherStorageToMap(new CipherStorageKeystoreAesCbc(hasStrongbox));
 
     // we have a references to newer api that will fail load of app classes in old androids OS
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb());
+      addCipherStorageToMap(new CipherStorageKeystoreAesGcmBiometrics(hasStrongbox));
+      addCipherStorageToMap(new CipherStorageKeystoreRsaEcb(hasStrongbox));
     }
   }
 
@@ -219,7 +228,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
       throwIfInsufficientLevel(storage, level);
 
-      final EncryptionResult result = storage.encrypt(alias, username, password, level);
+      final PromptInfo promptInfo = getPromptInfo(options, Maps.AUTH_PROMPT);
+      final DecryptionResultHandler handler = getInteractiveHandler(storage, promptInfo);
+      final EncryptionResult result = storage.encrypt(handler, alias, username, password, level);
+
       prefsStorage.storeEncryptedEntry(alias, result);
 
       final WritableMap results = Arguments.createMap();
@@ -291,8 +303,13 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       final CipherStorage current = getCipherStorageForCurrentAPILevel(useBiometry);
       final String rules = getSecurityRulesOrDefault(options);
 
-      final PromptInfo promptInfo = getPromptInfo(options);
-      final DecryptionResult decryptionResult = decryptCredentials(alias, current, resultSet, rules, promptInfo);
+      final PromptInfo promptInfo = getPromptInfo(options, Maps.AUTH_PROMPT);
+      PromptInfo migrationPromptInfo = promptInfo;
+      if (options != null && options.hasKey(Maps.AUTH_MIGRATION_PROMPT)) {
+        migrationPromptInfo = getPromptInfo(options, Maps.AUTH_MIGRATION_PROMPT);
+      }
+
+      final DecryptionResult decryptionResult = decryptCredentials(alias, current, resultSet, rules, promptInfo, migrationPromptInfo);
 
       final WritableMap credentials = Arguments.createMap();
       credentials.putString(Maps.SERVICE, alias);
@@ -404,12 +421,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   public void getSupportedBiometryType(@NonNull final Promise promise) {
     try {
       String reply = null;
-      if(isFaceAuthAvailable()){
-        reply = FACE_SUPPORTED_NAME;
-      } else if(isIrisAuthAvailable()) {
-        reply = IRIS_SUPPORTED_NAME;
-      } else if(isFingerprintAuthAvailable()) {
-        reply = FINGERPRINT_SUPPORTED_NAME;
+      // Determines if biometrics can be used, or equivalently, whether BiometricPrompt can be shown
+      // (hardware available, templates enrolled, user-enabled)
+      if (isBiometricAuthAvailable()) {
+        reply = BIOMETRICS_SUPPORTED_NAME;
       }
 
       promise.resolve(reply);
@@ -547,8 +562,8 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
   /** Extract user specified prompt info from options. */
   @NonNull
-  private static PromptInfo getPromptInfo(@Nullable final ReadableMap options) {
-    final ReadableMap promptInfoOptionsMap = (options != null && options.hasKey(Maps.AUTH_PROMPT)) ? options.getMap(Maps.AUTH_PROMPT) : null;
+  private static PromptInfo getPromptInfo(@Nullable final ReadableMap options, @Nullable final String key) {
+    final ReadableMap promptInfoOptionsMap = (options != null && options.hasKey(key)) ? options.getMap(key) : null;
 
     final PromptInfo.Builder promptInfoBuilder = new PromptInfo.Builder();
     if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.TITLE)) {
@@ -567,6 +582,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       String promptInfoNegativeButton = promptInfoOptionsMap.getString(AuthPromptOptions.CANCEL);
       promptInfoBuilder.setNegativeButtonText(promptInfoNegativeButton);
     }
+    if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.CONFIRMATION_REQUIRED)) {
+      boolean promptInfoConfirmationRequired = promptInfoOptionsMap.getBoolean(AuthPromptOptions.CONFIRMATION_REQUIRED);
+      promptInfoBuilder.setConfirmationRequired(promptInfoConfirmationRequired);
+    }
     final PromptInfo promptInfo = promptInfoBuilder.build();
 
     return promptInfo;
@@ -581,7 +600,8 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                               @NonNull final CipherStorage current,
                                               @NonNull final ResultSet resultSet,
                                               @Rules @NonNull final String rules,
-                                              @NonNull final PromptInfo promptInfo)
+                                              @NonNull final PromptInfo promptInfo,
+                                              @NonNull final PromptInfo migrationPromptInfo)
     throws CryptoFailedException, KeyStoreAccessException {
     final String storageName = resultSet.cipherStorageName;
 
@@ -603,7 +623,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     if (Rules.AUTOMATIC_UPGRADE.equals(rules)) {
       try {
         // encrypt using the current cipher storage
-        migrateCipherStorage(alias, current, oldStorage, decryptionResult);
+        migrateCipherStorage(alias, current, oldStorage, decryptionResult, migrationPromptInfo);
       } catch (CryptoFailedException e) {
         Log.w(KEYCHAIN_MODULE, "Migrating to a less safe storage is not allowed. Keeping the old one");
       }
@@ -620,7 +640,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                            @NonNull final PromptInfo promptInfo)
     throws CryptoFailedException {
     final DecryptionResultHandler handler = getInteractiveHandler(storage, promptInfo);
-    storage.decrypt(handler, alias, resultSet.username, resultSet.password, SecurityLevel.ANY);
+    storage.decrypt(handler, alias, resultSet.username, resultSet.password, SecurityLevel.ANY, resultSet.vector);
 
     CryptoFailedException.reThrowOnError(handler.getError());
 
@@ -638,21 +658,22 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       return new InteractiveBiometric(current, promptInfo);
     }
 
-    return new NonInteractiveHandler();
+    return new CipherStorageKeystoreAesGcmBiometrics.NonInteractiveHandler();
   }
 
   /** Remove key from old storage and add it to the new storage. */
   /* package */ void migrateCipherStorage(@NonNull final String service,
                                           @NonNull final CipherStorage newCipherStorage,
                                           @NonNull final CipherStorage oldCipherStorage,
-                                          @NonNull final DecryptionResult decryptionResult)
+                                          @NonNull final DecryptionResult decryptionResult,
+                                          PromptInfo promptInfo)
     throws KeyStoreAccessException, CryptoFailedException {
-
+    final DecryptionResultHandler handler = getInteractiveHandler(newCipherStorage, promptInfo);
     // don't allow to degrade security level when transferring, the new
     // storage should be as safe as the old one.
     final EncryptionResult encryptionResult = newCipherStorage.encrypt(
-      service, decryptionResult.username, decryptionResult.password,
-      decryptionResult.getSecurityLevel());
+      handler, service, decryptionResult.username, decryptionResult.password, decryptionResult.getSecurityLevel()
+    );
 
     // store the encryption result
     prefsStorage.storeEncryptedEntry(service, encryptionResult);
@@ -678,7 +699,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   /* package */ CipherStorage getCipherStorageForCurrentAPILevel(final boolean useBiometry)
     throws CryptoFailedException {
     final int currentApiLevel = Build.VERSION.SDK_INT;
-    final boolean isBiometry = (isFingerprintAuthAvailable() || isFaceAuthAvailable() || isIrisAuthAvailable()) && useBiometry;
+    final boolean isBiometry = (isBiometricAuthAvailable()) && useBiometry;
     CipherStorage foundCipher = null;
 
     for (CipherStorage variant : cipherStorageMap.values()) {
@@ -741,6 +762,11 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     return cipherStorageMap.get(knownName);
   }
 
+  /** True - if biometrics can be used, otherwise false. */
+  /* package */ boolean isBiometricAuthAvailable() {
+    return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext());
+  }
+
   /** True - if fingerprint hardware available and configured, otherwise false. */
   /* package */ boolean isFingerprintAuthAvailable() {
     return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isFingerprintAuthAvailable(getReactApplicationContext());
@@ -754,6 +780,15 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   /** True - if iris recognition hardware available and configured, otherwise false. */
   /* package */ boolean isIrisAuthAvailable() {
     return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isIrisAuthAvailable(getReactApplicationContext());
+  }
+
+  /** True - if strongbox hardware available, otherwise false. */
+  /* package */ boolean isStrongboxAvailable() {
+    boolean isAvailable = false;
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+      isAvailable = DeviceAvailability.isStrongboxAvailable(getReactApplicationContext());
+    }
+    return isAvailable;
   }
 
   /** Is secured hardware a part of current storage or not. */
@@ -798,9 +833,11 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   /** Interactive user questioning for biometric data providing. */
   private class InteractiveBiometric extends BiometricPrompt.AuthenticationCallback implements DecryptionResultHandler {
     private DecryptionResult result;
+    private EncryptionResult encryptionResult;
     private Throwable error;
     private final CipherStorageBase storage;
     private final Executor executor = Executors.newSingleThreadExecutor();
+    private CipherStorage.EncryptContext encryptContext;
     private DecryptionContext context;
     private PromptInfo promptInfo;
 
@@ -810,22 +847,64 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     }
 
     @Override
-    public void askAccessPermissions(@NonNull final DecryptionContext context) {
+    public void askAccessPermissions(@NonNull final DecryptionContext context, Cipher cipher) {
       this.context = context;
+      encryptContext = null;
+      if (!DeviceAvailability.isPermissionsGranted(getReactApplicationContext())) {
+        final CryptoFailedException failure = new CryptoFailedException(
+          "Could not start fingerprint Authentication. No permissions granted.");
+
+        onError(failure);
+      } else {
+        startAuthentication(cipher);
+      }
+    }
+
+    public EncryptionResult getEncryptionResult() {
+      return encryptionResult;
+    }
+
+    @Override
+    public void askAccessPermissionsEncryption(@NonNull final CipherStorage.EncryptContext context, Cipher cipher) {
+      encryptContext = context;
+      this.context = null;
 
       if (!DeviceAvailability.isPermissionsGranted(getReactApplicationContext())) {
         final CryptoFailedException failure = new CryptoFailedException(
           "Could not start fingerprint Authentication. No permissions granted.");
 
-        onDecrypt(null, failure);
+        onError(failure);
       } else {
-        startAuthentication();
+        startAuthentication(cipher);
       }
     }
 
     @Override
-    public void onDecrypt(@Nullable final DecryptionResult decryptionResult, @Nullable final Throwable error) {
+    public void onDecrypt(@Nullable final DecryptionResult decryptionResult) {
       this.result = decryptionResult;
+      this.encryptionResult = null;
+      this.error = null;
+
+      synchronized (this) {
+        notifyAll();
+      }
+    }
+
+    @Override
+    public void onEncrypt(@Nullable final EncryptionResult encryptionResult) {
+      this.result = null;
+      this.encryptionResult = encryptionResult;
+      this.error = null;
+
+      synchronized (this) {
+        notifyAll();
+      }
+    }
+
+    @Override
+    public void onError(@Nullable Throwable error) {
+      this.result = null;
+      this.encryptionResult = null;
       this.error = error;
 
       synchronized (this) {
@@ -845,46 +924,89 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       return error;
     }
 
-    /** Called when an unrecoverable error has been encountered and the operation is complete. */
+    /**
+     * Called when an unrecoverable error has been encountered and the operation is complete.
+     */
     @Override
     public void onAuthenticationError(final int errorCode, @NonNull final CharSequence errString) {
       final CryptoFailedException error = new CryptoFailedException("code: " + errorCode + ", msg: " + errString);
-
-      onDecrypt(null, error);
+      onError(error);
     }
 
-    /** Called when a biometric is recognized. */
+    /**
+     * Called when a biometric is recognized.
+     */
     @Override
     public void onAuthenticationSucceeded(@NonNull final BiometricPrompt.AuthenticationResult result) {
       try {
-        if (null == context) throw new NullPointerException("Decrypt context is not assigned yet.");
+        if (null != context) {
+          // decryption
 
-        final DecryptionResult decrypted = new DecryptionResult(
-          storage.decryptBytes(context.key, context.username),
-          storage.decryptBytes(context.key, context.password)
-        );
+          if (result.getCryptoObject() == null) {
+            // RSA flow (using `setUserAuthenticationValidityDurationSeconds`)
+            final DecryptionResult decrypted = new DecryptionResult(
+              storage.decryptBytes(context.key, context.username),
+              storage.decryptBytes(context.key, context.password)
+            );
 
-        onDecrypt(decrypted, null);
+            onDecrypt(decrypted);
+          } else {
+            // AES_BIOMETRICS flow
+            Cipher cipher = result.getCryptoObject().getCipher();
+            byte[] usernameBytes = cipher.update(context.username);
+            byte[] passBytes = cipher.doFinal(context.password);
+            String userNameAndPass = new String(passBytes);
+            String[] data = userNameAndPass.split("\n");
+            final DecryptionResult decrypted = new DecryptionResult(
+              data[0],
+              data[1]
+            );
+
+            onDecrypt(decrypted);
+          }
+        } else if (null != encryptContext) {
+          // encryption
+          Cipher cipher = result.getCryptoObject().getCipher();
+          byte[] usernameBytes = (encryptContext.username.trim() + '\n').getBytes();
+          byte[] passBytes = encryptContext.password.getBytes();
+          byte[] encryptedUserName = cipher.update(usernameBytes);
+          byte[] encryptedPassword = cipher.doFinal(passBytes);
+
+          final EncryptionResult encrypted = new EncryptionResult(
+            encryptedUserName,
+            encryptedPassword,
+            cipher.getIV(),
+            KnownCiphers.AES_BIOMETRICS);
+          onEncrypt(encrypted);
+        } else {
+          throw new NullPointerException("Decrypt context is not assigned yet.");
+        }
       } catch (Throwable fail) {
-        onDecrypt(null, fail);
+        onError(fail);
       }
     }
 
-    /** trigger interactive authentication. */
-    public void startAuthentication() {
+    /**
+     * trigger interactive authentication.
+     */
+    public void startAuthentication(Cipher cipher) {
       final FragmentActivity activity = (FragmentActivity) getCurrentActivity();
       if (null == activity) throw new NullPointerException("Not assigned current activity");
 
       // code can be executed only from MAIN thread
       if (Thread.currentThread() != Looper.getMainLooper().getThread()) {
-        activity.runOnUiThread(this::startAuthentication);
+        activity.runOnUiThread(() -> startAuthentication(cipher));
         waitResult();
         return;
       }
 
       final BiometricPrompt prompt = new BiometricPrompt(activity, executor, this);
 
-      prompt.authenticate(this.promptInfo);
+      if (cipher != null) {
+        prompt.authenticate(promptInfo, new BiometricPrompt.CryptoObject(cipher));
+      } else {
+        prompt.authenticate(promptInfo);
+      }
     }
 
     /** Block current NON-main thread and wait for user authentication results. */

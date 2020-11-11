@@ -91,6 +91,7 @@ export default class KeychainExample extends Component {
           subtitle: 'Subtitle',
           description: 'Some descriptive text',
           cancel: 'Cancel',
+          confirmationRequired: false,
         },
       };
       const credentials = await Keychain.getGenericPassword(options);
