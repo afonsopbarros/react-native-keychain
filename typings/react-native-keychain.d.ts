@@ -55,6 +55,7 @@ declare module 'react-native-keychain' {
     AES = 'KeystoreAESCBC',
     RSA = 'KeystoreRSAECB',
     KC = 'keychain',
+    AES_BIOMETRICS = 'KeystoreAESGCMBiometrics',
   }
 
   export enum SECURITY_RULES {
