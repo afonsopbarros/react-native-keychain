@@ -223,6 +223,14 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     try {
       throwIfEmptyLoginPassword(username, password);
 
+      // nested recoverable-try
+      try {
+        // deletes key entry and shared preferences to cleanup before encryption
+        deleteBiometricKey(alias);
+      } catch (Throwable fail) {
+        Log.e(KEYCHAIN_MODULE, fail.getMessage(), fail);
+      }
+
       final SecurityLevel level = getSecurityLevelOrDefault(options);
       final CipherStorage storage = getSelectedStorage(options);
 
@@ -340,21 +348,25 @@ public class KeychainModule extends ReactContextBaseJavaModule {
     getGenericPassword(service, options, promise);
   }
 
+  protected void deleteBiometricKey(@NonNull final String alias) throws KeyStoreAccessException {
+    // First we clean up the cipher storage (using the cipher storage that was used to store the entry)
+    final ResultSet resultSet = prefsStorage.getEncryptedEntry(alias);
+
+    if (resultSet != null) {
+      final CipherStorage cipherStorage = getCipherStorageByName(resultSet.cipherStorageName);
+
+      if (cipherStorage != null) {
+        cipherStorage.removeKey(alias);
+      }
+    }
+    // And then we remove the entry in the shared preferences
+    prefsStorage.removeEntry(alias);
+  }
+
   protected void resetGenericPassword(@NonNull final String alias,
                                       @NonNull final Promise promise) {
     try {
-      // First we clean up the cipher storage (using the cipher storage that was used to store the entry)
-      final ResultSet resultSet = prefsStorage.getEncryptedEntry(alias);
-
-      if (resultSet != null) {
-        final CipherStorage cipherStorage = getCipherStorageByName(resultSet.cipherStorageName);
-
-        if (cipherStorage != null) {
-          cipherStorage.removeKey(alias);
-        }
-      }
-      // And then we remove the entry in the shared preferences
-      prefsStorage.removeEntry(alias);
+      deleteBiometricKey(alias);
 
       promise.resolve(true);
     } catch (KeyStoreAccessException e) {

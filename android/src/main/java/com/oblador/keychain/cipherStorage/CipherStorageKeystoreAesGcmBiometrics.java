@@ -17,6 +17,7 @@ import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
 import java.security.GeneralSecurityException;
 import java.security.Key;
+import java.security.KeyStore;
 import java.security.spec.KeySpec;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -53,6 +54,21 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
   public static final String DEFAULT_SERVICE = "RN_KEYCHAIN_DEFAULT_ALIAS";
   //endregion
 
+  // excerpt from https://github.com/android/security-samples/tree/main/BiometricLoginKotlin
+  private Key getOrCreateSecretKey(@NonNull final String safeAlias,
+                                   @NonNull final SecurityLevel level)
+    throws GeneralSecurityException {
+    // If Secretkey was previously created for that keyName, then grab and return it.
+    final KeyStore keyStore = getKeyStoreAndLoad(); // Keystore must be loaded before it can be accessed
+    final Key key = keyStore.getKey(safeAlias, null);
+    if (key != null) {
+      return key;
+    }
+
+    // if you reach here, then a new SecretKey must be generated for that keyName
+    return generateKeyAndStoreUnderAlias(safeAlias, level);
+  }
+
   //region Overrides
   @Override
   @NonNull
@@ -66,15 +82,16 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
     throwIfInsufficientLevel(level);
 
     final String safeAlias = getDefaultAliasIfEmpty(alias, getDefaultAliasServiceName());
-    final AtomicInteger retries = new AtomicInteger(1);
 
     try {
-      final Key key = extractGeneratedKey(safeAlias, level, retries);
+      final Key key = getOrCreateSecretKey(safeAlias, level);
 
       final EncryptContext context =
-        new EncryptContext(alias, password, username);
-      Cipher cipher = getCachedInstance();
+        new EncryptContext(safeAlias, password, username);
+
+      Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
       cipher.init(Cipher.ENCRYPT_MODE, key);
+
       handler.askAccessPermissionsEncryption(context, cipher);
 
       CryptoFailedException.reThrowOnError(handler.getError());
@@ -86,9 +103,9 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
     } catch (CryptoFailedException e) {
       throw e;
     } catch (GeneralSecurityException e) {
-      throw new CryptoFailedException("Could not encrypt data with alias: " + alias, e);
+      throw new CryptoFailedException("Could not encrypt data with alias: " + safeAlias + ", error: " + e.getMessage(), e);
     } catch (Throwable fail) {
-      throw new CryptoFailedException("Unknown error with alias: " + alias +
+      throw new CryptoFailedException("Unknown error with alias: " + safeAlias +
         ", error: " + fail.getMessage(), fail);
     }
   }
@@ -126,16 +143,15 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
     throwIfInsufficientLevel(level);
 
     final String safeAlias = getDefaultAliasIfEmpty(alias, getDefaultAliasServiceName());
-    final AtomicInteger retries = new AtomicInteger(1);
 
     try {
       // key is always NOT NULL otherwise GeneralSecurityException raised
-      Key key = extractGeneratedKey(safeAlias, level, retries);
+      Key key = getOrCreateSecretKey(safeAlias, level);
 
       final DecryptionContext context =
         new DecryptionContext(safeAlias, key, password, username);
 
-      final Cipher cipher = getCachedInstance();
+      Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
       cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, vector));
 
       handler.askAccessPermissions(context, cipher);
