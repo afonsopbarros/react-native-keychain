@@ -35,6 +35,7 @@ import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.EmptyParameterException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.HashMap;
 import java.util.Map;
@@ -251,7 +252,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       Log.e(KEYCHAIN_MODULE, e.getMessage(), e);
 
       promise.reject(Errors.E_EMPTY_PARAMETERS, e);
-    } catch (CryptoFailedException e) {
+    } catch (GeneralSecurityException e) {
       Log.e(KEYCHAIN_MODULE, e.getMessage(), e);
 
       promise.reject(Errors.E_CRYPTO_FAILED, e);
@@ -330,7 +331,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       Log.e(KEYCHAIN_MODULE, e.getMessage());
 
       promise.reject(Errors.E_KEYSTORE_ACCESS_ERROR, e);
-    } catch (CryptoFailedException e) {
+    } catch (GeneralSecurityException e) {
       Log.e(KEYCHAIN_MODULE, e.getMessage());
 
       promise.reject(Errors.E_CRYPTO_FAILED, e);
@@ -614,7 +615,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                               @Rules @NonNull final String rules,
                                               @NonNull final PromptInfo promptInfo,
                                               @NonNull final PromptInfo migrationPromptInfo)
-    throws CryptoFailedException, KeyStoreAccessException {
+    throws GeneralSecurityException, KeyStoreAccessException {
     final String storageName = resultSet.cipherStorageName;
 
     // The encrypted data is encrypted using the current CipherStorage, so we just decrypt and return
@@ -650,7 +651,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                            @NonNull final CipherStorage storage,
                                            @NonNull final ResultSet resultSet,
                                            @NonNull final PromptInfo promptInfo)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
     final DecryptionResultHandler handler = getInteractiveHandler(storage, promptInfo);
     storage.decrypt(handler, alias, resultSet.username, resultSet.password, SecurityLevel.ANY, resultSet.vector);
 
@@ -679,7 +680,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                           @NonNull final CipherStorage oldCipherStorage,
                                           @NonNull final DecryptionResult decryptionResult,
                                           PromptInfo promptInfo)
-    throws KeyStoreAccessException, CryptoFailedException {
+    throws GeneralSecurityException, CryptoFailedException {
     final DecryptionResultHandler handler = getInteractiveHandler(newCipherStorage, promptInfo);
     // don't allow to degrade security level when transferring, the new
     // storage should be as safe as the old one.

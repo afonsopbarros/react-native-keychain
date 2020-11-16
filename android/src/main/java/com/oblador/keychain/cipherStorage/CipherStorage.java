@@ -7,6 +7,7 @@ import com.oblador.keychain.SecurityLevel;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
+import java.security.GeneralSecurityException;
 import java.security.Key;
 
 import javax.crypto.Cipher;
@@ -130,7 +131,7 @@ public interface CipherStorage {
                            @NonNull final String username,
                            @NonNull final String password,
                            @NonNull final SecurityLevel level)
-    throws CryptoFailedException;
+    throws GeneralSecurityException;
 
   /**
    * Decrypt credentials with provided key (by alias) and required security level.
@@ -143,7 +144,7 @@ public interface CipherStorage {
                            @NonNull final byte[] password,
                            @NonNull final SecurityLevel level,
                            byte[] vector)
-    throws CryptoFailedException;
+    throws GeneralSecurityException;
 
   /** Decrypt the credentials but redirect results of operation to handler. */
   void decrypt(@NonNull final DecryptionResultHandler handler,
@@ -152,7 +153,7 @@ public interface CipherStorage {
                @NonNull final byte[] password,
                @NonNull final SecurityLevel level,
                byte[] vector)
-    throws CryptoFailedException;
+          throws GeneralSecurityException;
 
   /** Remove key (by alias) from storage. */
   void removeKey(@NonNull final String alias) throws KeyStoreAccessException;

@@ -77,37 +77,29 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
                                   @NonNull final String username,
                                   @NonNull final String password,
                                   @NonNull final SecurityLevel level)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
 
     throwIfInsufficientLevel(level);
 
     final String safeAlias = getDefaultAliasIfEmpty(alias, getDefaultAliasServiceName());
 
-    try {
-      final Key key = getOrCreateSecretKey(safeAlias, level);
+    final Key key = getOrCreateSecretKey(safeAlias, level);
 
-      final EncryptContext context =
-        new EncryptContext(safeAlias, password, username);
+    final EncryptContext context =
+      new EncryptContext(safeAlias, password, username);
 
-      Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
-      cipher.init(Cipher.ENCRYPT_MODE, key);
+    Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
+    cipher.init(Cipher.ENCRYPT_MODE, key);
 
-      handler.askAccessPermissionsEncryption(context, cipher);
+    handler.askAccessPermissionsEncryption(context, cipher);
 
-      CryptoFailedException.reThrowOnError(handler.getError());
+    // do the same as `decryptToResult` in `KeychainModule`
+    CryptoFailedException.reThrowOnError(handler.getError());
 
-      if (null == handler.getEncryptionResult()) {
-        throw new CryptoFailedException("No encryption results. Something deeply wrong!");
-      }
-      return handler.getEncryptionResult();
-    } catch (CryptoFailedException e) {
-      throw e;
-    } catch (GeneralSecurityException e) {
-      throw new CryptoFailedException("Could not encrypt data with alias: " + safeAlias + ", error: " + e.getMessage(), e);
-    } catch (Throwable fail) {
-      throw new CryptoFailedException("Unknown error with alias: " + safeAlias +
-        ", error: " + fail.getMessage(), fail);
+    if (null == handler.getEncryptionResult()) {
+      throw new CryptoFailedException("No encryption results. Something deeply wrong!");
     }
+    return handler.getEncryptionResult();
   }
 
   @NonNull
@@ -116,7 +108,7 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
                                   @NonNull byte[] username,
                                   @NonNull byte[] password,
                                   @NonNull final SecurityLevel level, byte[] vector)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
 
     final NonInteractiveHandler handler = new NonInteractiveHandler();
     decrypt(handler, alias, username, password, level, vector);
@@ -138,27 +130,22 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
                       @NonNull byte[] password,
                       @NonNull final SecurityLevel level,
                       byte[] vector)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
 
     throwIfInsufficientLevel(level);
 
     final String safeAlias = getDefaultAliasIfEmpty(alias, getDefaultAliasServiceName());
 
-    try {
-      // key is always NOT NULL otherwise GeneralSecurityException raised
-      Key key = getOrCreateSecretKey(safeAlias, level);
+    // key is always NOT NULL otherwise GeneralSecurityException raised
+    Key key = getOrCreateSecretKey(safeAlias, level);
 
-      final DecryptionContext context =
-        new DecryptionContext(safeAlias, key, password, username);
+    final DecryptionContext context =
+      new DecryptionContext(safeAlias, key, password, username);
 
-      Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
-      cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, vector));
+    Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
+    cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, vector));
 
-      handler.askAccessPermissions(context, cipher);
-    } catch (final Throwable fail) {
-      // any other exception treated as a failure
-      handler.onError(fail);
-    }
+    handler.askAccessPermissions(context, cipher);
   }
 
   //region Configuration
