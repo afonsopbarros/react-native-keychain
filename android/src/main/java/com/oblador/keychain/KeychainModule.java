@@ -637,7 +637,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       try {
         // encrypt using the current cipher storage
         migrateCipherStorage(alias, current, oldStorage, decryptionResult, migrationPromptInfo);
-      } catch (CryptoFailedException e) {
+      } catch (GeneralSecurityException e) {
         Log.w(KEYCHAIN_MODULE, "Migrating to a less safe storage is not allowed. Keeping the old one");
       }
     }
@@ -680,7 +680,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
                                           @NonNull final CipherStorage oldCipherStorage,
                                           @NonNull final DecryptionResult decryptionResult,
                                           PromptInfo promptInfo)
-    throws GeneralSecurityException, CryptoFailedException {
+    throws GeneralSecurityException, KeyStoreAccessException {
     final DecryptionResultHandler handler = getInteractiveHandler(newCipherStorage, promptInfo);
     // don't allow to degrade security level when transferring, the new
     // storage should be as safe as the old one.
