@@ -17,6 +17,7 @@ import com.oblador.keychain.exceptions.KeyStoreAccessException;
 
 import java.security.GeneralSecurityException;
 import java.security.Key;
+import java.security.KeyStore;
 import java.security.spec.KeySpec;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -53,6 +54,21 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
   public static final String DEFAULT_SERVICE = "RN_KEYCHAIN_DEFAULT_ALIAS";
   //endregion
 
+  // excerpt from https://github.com/android/security-samples/tree/main/BiometricLoginKotlin
+  private Key getOrCreateSecretKey(@NonNull final String safeAlias,
+                                   @NonNull final SecurityLevel level)
+    throws GeneralSecurityException {
+    // If Secretkey was previously created for that keyName, then grab and return it.
+    final KeyStore keyStore = getKeyStoreAndLoad(); // Keystore must be loaded before it can be accessed
+    final Key key = keyStore.getKey(safeAlias, null);
+    if (key != null) {
+      return key;
+    }
+
+    // if you reach here, then a new SecretKey must be generated for that keyName
+    return generateKeyAndStoreUnderAlias(safeAlias, level);
+  }
+
   //region Overrides
   @Override
   @NonNull
@@ -61,36 +77,29 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
                                   @NonNull final String username,
                                   @NonNull final String password,
                                   @NonNull final SecurityLevel level)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
 
     throwIfInsufficientLevel(level);
 
     final String safeAlias = getDefaultAliasIfEmpty(alias, getDefaultAliasServiceName());
-    final AtomicInteger retries = new AtomicInteger(1);
 
-    try {
-      final Key key = extractGeneratedKey(safeAlias, level, retries);
+    final Key key = getOrCreateSecretKey(safeAlias, level);
 
-      final EncryptContext context =
-        new EncryptContext(alias, password, username);
-      Cipher cipher = getCachedInstance();
-      cipher.init(Cipher.ENCRYPT_MODE, key);
-      handler.askAccessPermissionsEncryption(context, cipher);
+    final EncryptContext context =
+      new EncryptContext(safeAlias, password, username);
 
-      CryptoFailedException.reThrowOnError(handler.getError());
+    Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
+    cipher.init(Cipher.ENCRYPT_MODE, key);
 
-      if (null == handler.getEncryptionResult()) {
-        throw new CryptoFailedException("No encryption results. Something deeply wrong!");
-      }
-      return handler.getEncryptionResult();
-    } catch (CryptoFailedException e) {
-      throw e;
-    } catch (GeneralSecurityException e) {
-      throw new CryptoFailedException("Could not encrypt data with alias: " + alias, e);
-    } catch (Throwable fail) {
-      throw new CryptoFailedException("Unknown error with alias: " + alias +
-        ", error: " + fail.getMessage(), fail);
+    handler.askAccessPermissionsEncryption(context, cipher);
+
+    // do the same as `decryptToResult` in `KeychainModule`
+    CryptoFailedException.reThrowOnError(handler.getError());
+
+    if (null == handler.getEncryptionResult()) {
+      throw new CryptoFailedException("No encryption results. Something deeply wrong!");
     }
+    return handler.getEncryptionResult();
   }
 
   @NonNull
@@ -99,7 +108,7 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
                                   @NonNull byte[] username,
                                   @NonNull byte[] password,
                                   @NonNull final SecurityLevel level, byte[] vector)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
 
     final NonInteractiveHandler handler = new NonInteractiveHandler();
     decrypt(handler, alias, username, password, level, vector);
@@ -121,28 +130,22 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
                       @NonNull byte[] password,
                       @NonNull final SecurityLevel level,
                       byte[] vector)
-    throws CryptoFailedException {
+    throws GeneralSecurityException {
 
     throwIfInsufficientLevel(level);
 
     final String safeAlias = getDefaultAliasIfEmpty(alias, getDefaultAliasServiceName());
-    final AtomicInteger retries = new AtomicInteger(1);
 
-    try {
-      // key is always NOT NULL otherwise GeneralSecurityException raised
-      Key key = extractGeneratedKey(safeAlias, level, retries);
+    // key is always NOT NULL otherwise GeneralSecurityException raised
+    Key key = getOrCreateSecretKey(safeAlias, level);
 
-      final DecryptionContext context =
-        new DecryptionContext(safeAlias, key, password, username);
+    final DecryptionContext context =
+      new DecryptionContext(safeAlias, key, password, username);
 
-      final Cipher cipher = getCachedInstance();
-      cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, vector));
+    Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
+    cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, vector));
 
-      handler.askAccessPermissions(context, cipher);
-    } catch (final Throwable fail) {
-      // any other exception treated as a failure
-      handler.onError(fail);
-    }
+    handler.askAccessPermissions(context, cipher);
   }
 
   //region Configuration
