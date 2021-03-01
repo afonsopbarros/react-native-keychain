@@ -374,7 +374,7 @@ abstract public class CipherStorageBase implements CipherStorage {
   }
 
   /** Get the most secured keystore */
-  public void generateKeyAndStoreUnderAlias(@NonNull final String alias,
+  public Key generateKeyAndStoreUnderAlias(@NonNull final String alias,
                                             @NonNull final SecurityLevel requiredLevel)
     throws GeneralSecurityException {
 
@@ -421,6 +421,8 @@ abstract public class CipherStorageBase implements CipherStorage {
     if (!validateKeySecurityLevel(requiredLevel, secretKey)) {
       throw new CryptoFailedException("Cannot generate keys with required security guarantees");
     }
+
+    return secretKey;
   }
 
   /** Try to get secured keystore instance. */
