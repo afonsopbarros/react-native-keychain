@@ -5,6 +5,8 @@ import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyInfo;
 import android.security.keystore.KeyProperties;
+import android.security.keystore.KeyPermanentlyInvalidatedException;
+
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -89,7 +91,15 @@ public class CipherStorageKeystoreAesGcmBiometrics extends CipherStorageBase {
       new EncryptContext(safeAlias, password, username);
 
     Cipher cipher = Cipher.getInstance(getEncryptionTransformation());
-    cipher.init(Cipher.ENCRYPT_MODE, key);
+    try {
+      cipher.init(Cipher.ENCRYPT_MODE, key);
+    }
+    catch (KeyPermanentlyInvalidatedException e) {
+      final KeyStore keyStore = getKeyStoreAndLoad();
+      keyStore.deleteEntry(safeAlias);
+      final Key newKey = getOrCreateSecretKey(safeAlias, level);
+      cipher.init(Cipher.ENCRYPT_MODE, newKey);
+    }
 
     handler.askAccessPermissionsEncryption(context, cipher);
 
