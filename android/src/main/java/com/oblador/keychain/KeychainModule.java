@@ -8,6 +8,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringDef;
+import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.biometric.BiometricPrompt.PromptInfo;
 import androidx.fragment.app.FragmentActivity;
@@ -599,6 +600,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
       boolean promptInfoConfirmationRequired = promptInfoOptionsMap.getBoolean(AuthPromptOptions.CONFIRMATION_REQUIRED);
       promptInfoBuilder.setConfirmationRequired(promptInfoConfirmationRequired);
     }
+
+    /* PromptInfo is only used in Biometric-enabled storage and can only be unlocked by a strong biometric */
+    promptInfoBuilder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+
     final PromptInfo promptInfo = promptInfoBuilder.build();
 
     return promptInfo;
