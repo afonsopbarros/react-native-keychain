@@ -35,6 +35,7 @@ import com.oblador.keychain.cipherStorage.CipherStorageKeystoreRsaEcb;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.EmptyParameterException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
+import android.security.identity.IdentityCredential;
 
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
